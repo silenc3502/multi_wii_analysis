@@ -36,7 +36,7 @@
     //#define BI
     //#define TRI
     //#define QUADP
-    //#define QUADX
+    #define QUADX
     //#define Y4
     //#define Y6
     //#define HEX6
@@ -58,13 +58,14 @@
        This is the minimum value that allow motors to run at a idle speed  */
     //#define MINTHROTTLE 1300 // for Turnigy Plush ESCs 10A
     //#define MINTHROTTLE 1120 // for Super Simple ESCs 10A
-    //#define MINTHROTTLE 1064 // special ESC (simonk)
+    #define MINTHROTTLE 1064 // special ESC (simonk)
     //#define MINTHROTTLE 1050 // for brushed ESCs like ladybird
-    #define MINTHROTTLE 1150 // (*) (**)
+    //#define MINTHROTTLE 1150 // (*) (**)
 
   /****************************    Motor maxthrottle    *******************************/
     /* this is the maximum value for the ESCs at full power, this value can be increased up to 2000 */
-    #define MAXTHROTTLE 1850
+    //#define MAXTHROTTLE 1850
+    #define MAXTHROTTLE 2000
 
   /****************************    Mincommand          *******************************/
     /* this is the value for the ESCs when they are not armed
@@ -72,8 +73,8 @@
     #define MINCOMMAND  1000
 
   /**********************************  I2C speed for old WMP config (useless config for other sensors)  *************/
-    #define I2C_SPEED 100000L     //100kHz normal mode, this value must be used for a genuine WMP
-    //#define I2C_SPEED 400000L   //400kHz fast mode, it works only with some WMP clones
+    //#define I2C_SPEED 100000L     //100kHz normal mode, this value must be used for a genuine WMP
+    #define I2C_SPEED 400000L   //400kHz fast mode, it works only with some WMP clones
 
   /***************************    Internal i2c Pullups   ********************************/
     /* enable internal I2C pull ups (in most cases it is better to use external pullups) */
@@ -132,7 +133,7 @@
       //#define GY_80           // Chinese 10 DOF with  L3G4200D ADXL345 HMC5883L BMP085, LLC
       //#define GY_85           // Chinese 9 DOF with  ITG3205 ADXL345 HMC5883L LLC
       //#define GY_86           // Chinese 10 DOF with  MPU6050 HMC5883L MS5611, LLC
-      //#define GY_88 // Chinese 10 DOF with MPU6050 HMC5883L BMP085, LLC
+      #define GY_88 // Chinese 10 DOF with MPU6050 HMC5883L BMP085, LLC
       //#define GY_521          // Chinese 6  DOF with  MPU6050, LLC
       //#define INNOVWORKS_10DOF // with ITG3200, BMA180, HMC5883, BMP085 available here http://www.diymulticopter.com
       //#define INNOVWORKS_6DOF // with ITG3200, BMA180 available here http://www.diymulticopter.com
