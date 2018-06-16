@@ -626,6 +626,7 @@ void annexCode() { // this code is excetuted at each loop and won't interfere wi
 }
 
 void setup() {
+  // UART 통신 포트 설정
   SerialOpen(0,SERIAL0_COM_SPEED);
   #if defined(PROMICRO)
     SerialOpen(1,SERIAL1_COM_SPEED);
@@ -635,12 +636,20 @@ void setup() {
     SerialOpen(2,SERIAL2_COM_SPEED);
     SerialOpen(3,SERIAL3_COM_SPEED);
   #endif
+  // GPIO 설정
   LEDPIN_PINMODE;
+  // 구동 되지 않음
   POWERPIN_PINMODE;
+  // 옵션에 따라서 부저를 활성화 시킬 수 있지만
+  // 현재 우리의 관심사가 아니므로 기능을 꺼두도록 하자!
   BUZZERPIN_PINMODE;
+  // A2(Pin) 혹은 핀 31 을 사용함
   STABLEPIN_PINMODE;
+  // 구동 되지 않음
   POWERPIN_OFF;
+  // 모터를 활성화 시키고 PWM 신호를 인가함
   initOutput();
+  // EEPROM 을 읽어서 전류값이라든지 여러 정보를 읽어오고 설정에 문제가 없는지 확인함
   readGlobalSet();
   #ifndef NO_FLASH_CHECK
     #if defined(MEGA)
@@ -686,6 +695,7 @@ void setup() {
     recallGPSconf();                              //Load GPS configuration parameteres
   #endif
 
+  // 수신기 설정
   configureReceiver();
   #if defined (PILOTLAMP) 
     PL_INIT;
@@ -693,6 +703,7 @@ void setup() {
   #if defined(OPENLRSv2MULTI)
     initOpenLRS();
   #endif
+  // 쿼드콥터에 달려있는 모든 센서가 초기화 되었음
   initSensors();
   #if GPS
     GPS_set_pids();
@@ -1397,8 +1408,10 @@ void loop () {
     errorGyroI[axis]  = constrain(errorGyroI[axis]+error,-16000,+16000);       // WindUp   16 bits is ok here
     if (abs(imu.gyroData[axis])>640) errorGyroI[axis] = 0;
 
+    // 적분 제어기 계수
     ITerm = (errorGyroI[axis]>>7)*conf.pid[axis].I8>>6;                        // 16 bits is ok here 16000/125 = 128 ; 128*250 = 32000
 
+    // 비례 제어기 계수
     PTerm = mul(rc,conf.pid[axis].P8)>>6;
     
     if (f.ANGLE_MODE || f.HORIZON_MODE) { // axis relying on ACC
@@ -1421,6 +1434,7 @@ void loop () {
 
     delta          = imu.gyroData[axis] - lastGyro[axis];  // 16 bits is ok here, the dif between 2 consecutive gyro reads is limited to 800
     lastGyro[axis] = imu.gyroData[axis];
+    // 미분 제어기 계수
     DTerm          = delta1[axis]+delta2[axis]+delta;
     delta2[axis]   = delta1[axis];
     delta1[axis]   = delta;

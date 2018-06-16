@@ -66,14 +66,18 @@ static uint32_t neutralizeTime = 0;
 // ************************************************************************************************************
 
 void i2c_init(void) {
+  // 내부 풀업이 없으므로 별도의 풀업 저항을 달아줘야함
   #if defined(INTERNAL_I2C_PULLUPS)
     I2C_PULLUPS_ENABLE
   #else
     I2C_PULLUPS_DISABLE
   #endif
-  TWSR = 0;                                    // no prescaler => prescaler = 1
-  TWBR = ((F_CPU / 400000) - 16) / 2;          // set the I2C clock rate to 400kHz
-  TWCR = 1<<TWEN;                              // enable twi module, no interrupt
+  TWSR = 0;                                    // no prescaler => prescaler = 1 (스케일링 없음)
+  // 16000000 / 400000 = 40
+  // 40 - 16 = 24
+  // 24 / 2 = 12
+  TWBR = ((F_CPU / 400000) - 16) / 2;          // set the I2C clock rate to 400kHz (TWBR 레지스터를 통해 400 kHz 맞춰줌)
+  TWCR = 1<<TWEN;                              // enable twi module, no interrupt (TWI 라는 AVR 용 I2C 장치 활성화!)
   i2c_errors_count = 0;
 }
 
@@ -121,13 +125,14 @@ uint8_t i2c_readNak() {
   return r;
 }
 
+// 버퍼에 읽어온 정보들을 저장함
 void i2c_read_reg_to_buf(uint8_t add, uint8_t reg, uint8_t *buf, uint8_t size) {
   i2c_rep_start(add<<1); // I2C write direction
   i2c_write(reg);        // register selection
   i2c_rep_start((add<<1) | 1);  // I2C read direction
   uint8_t *b = buf;
-  while (--size) *b++ = i2c_readAck(); // acknowledge all but the final byte
-  *b = i2c_readNak();
+  while (--size) *b++ = i2c_readAck(); // acknowledge all but the final byte (ACK 가 오면 뒤에 읽을 것이 남아있음)
+  *b = i2c_readNak(); // NAK 이 오면 다 읽었음
 }
 
 void i2c_getSixRawADC(uint8_t add, uint8_t reg) {
@@ -373,6 +378,7 @@ void i2c_BMP085_readCalibration(){
   delay(10);
   //read calibration data in one go
   size_t s_bytes = (uint8_t*)&bmp085_ctx.md - (uint8_t*)&bmp085_ctx.ac1 + sizeof(bmp085_ctx.ac1);
+  // 온도 및 압력 정보를 읽어옴
   i2c_read_reg_to_buf(BMP085_ADDRESS, 0xAA, (uint8_t*)&bmp085_ctx.ac1, s_bytes);
   // now fix endianness
   int16_t *p;
@@ -383,8 +389,10 @@ void i2c_BMP085_readCalibration(){
 
 // read uncompensated temperature value: send command first
 void i2c_BMP085_UT_Start(void) {
+  // 압력을 정밀도 최대, 온도 정밀도 최소, 강제 동작
   i2c_writeReg(BMP085_ADDRESS,0xf4,0x2e);
   i2c_rep_start(BMP085_ADDRESS<<1);
+  // F6 을 적으면 F6 과 F7 을 베이스로 정보를 읽을 수 있음
   i2c_write(0xF6);
   i2c_stop();
 }
@@ -1025,6 +1033,8 @@ static void getADC() {
 static uint8_t bias_collect(uint8_t bias) {
   int16_t abs_magADC;
 
+  // 데이터를 가져오는 비율이 15 Hz => T = 1/15 초
+  // 3 축에 대한 Bias 전류(양수)를 설정해줌
   i2c_writeReg(MAG_ADDRESS, HMC58X3_R_CONFA, bias);            // Reg A DOR=0x010 + MS1,MS0 set to pos or negative bias
   for (uint8_t i=0; i<10; i++) {                               // Collect 10 samples
     i2c_writeReg(MAG_ADDRESS,HMC58X3_R_MODE, 1);
@@ -1044,9 +1054,12 @@ static void Mag_init() {
 
   // Note that the  very first measurement after a gain change maintains the same gain as the previous setting. 
   // The new gain setting is effective from the second measurement and on.
+  // Sensor Field Range +- 1.9 Ga, Gain = 820, 해상도 = 1.22, 출력 범위 = -2048 ~ 2047
   i2c_writeReg(MAG_ADDRESS, HMC58X3_R_CONFB, 2 << 5);  //Set the Gain
+  // 기본값 설정(지자기 값을 읽기 위한 설정)
   i2c_writeReg(MAG_ADDRESS,HMC58X3_R_MODE, 1);
   delay(100);
+  // 읽은 지자기 결과값을 가져옴
   getADC();  //Get one sample, and discard it
 
   if (!bias_collect(0x010 + HMC_POS_BIAS)) bret = false;
@@ -1154,13 +1167,18 @@ void Device_Mag_getADC() {
 #endif
 
 static void Gyro_init() {
+  // 전원 관리 활성화
   i2c_writeReg(MPU6050_ADDRESS, 0x6B, 0x80);             //PWR_MGMT_1    -- DEVICE_RESET 1
   delay(50);
+  // Z 축 베이스 PLL
   i2c_writeReg(MPU6050_ADDRESS, 0x6B, 0x03);             //PWR_MGMT_1    -- SLEEP 0; CYCLE 0; TEMP_DIS 0; CLKSEL 3 (PLL with Z Gyro reference)
+  // LPF(Low Pass Filter 설정) - MPU6050 에 LPF 가 내장 되어 있음
   i2c_writeReg(MPU6050_ADDRESS, 0x1A, GYRO_DLPF_CFG);    //CONFIG        -- EXT_SYNC_SET 0 (disable input pin for data sync) ; default DLPF_CFG = 0 => ACC bandwidth = 260Hz  GYRO bandwidth = 256Hz)
+  // 제조사 말로는 5 바퀴가량을 1 초에 감지한다지만 현실은 2 바퀴가 한계
   i2c_writeReg(MPU6050_ADDRESS, 0x1B, 0x18);             //GYRO_CONFIG   -- FS_SEL = 3: Full scale set to 2000 deg/sec
   // enable I2C bypass for AUX I2C
   #if defined(MAG)
+    // Host Processor 에서 MPU6050 에 직접적 및 지속적으로 데이터에 접근 가능하게 해줌
     i2c_writeReg(MPU6050_ADDRESS, 0x37, 0x02);           //INT_PIN_CFG   -- INT_LEVEL=0 ; INT_OPEN=0 ; LATCH_INT_EN=0 ; INT_RD_CLEAR=0 ; FSYNC_INT_LEVEL=0 ; FSYNC_INT_EN=0 ; I2C_BYPASS_EN=1 ; CLKOUT_EN=0
   #endif
 }
@@ -1517,12 +1535,13 @@ void Sonar_update() {}
 
 
 void initS() {
+  // I2C Peripheral 초기화 - (I2C 는 표준이 없어서 데이터시트를 잘 살펴봐야함)
   i2c_init();
-  if (GYRO)  Gyro_init();
-  if (BARO)  Baro_init();
-  if (MAG)   Mag_init();
-  if (ACC)   ACC_init();
-  if (SONAR) Sonar_init();
+  if (GYRO)  Gyro_init();	// MPU6050 Slave Address 는 0x68
+  if (BARO)  Baro_init();   // BMP085(BMP180) Slave Address 0x77
+  if (MAG)   Mag_init();    // ADI 사의 HMC5883L Slave Address
+  if (ACC)   ACC_init();    // MPU6050 이라 Gyro 와 동일함
+  if (SONAR) Sonar_init();  // 초음파는 안달려 있음
 }
 
 void initSensors() {

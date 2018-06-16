@@ -17,7 +17,10 @@ uint8_t calculate_sum(uint8_t *cb , uint8_t siz) {
 }
 
 void readGlobalSet() {
+  // EEPROM 을 읽어서 global_conf 구조체에 정보를 채워 넣음
+  // eeprom_read_block 은 arduino 에서는 Library 화 해서 코드를 보지 못하게 막아놨음
   eeprom_read_block((void*)&global_conf, (void*)0, sizeof(global_conf));
+  // calculate_sum 은 읽은 정보의 무결성을 확인하기 위한 코드
   if(calculate_sum((uint8_t*)&global_conf, sizeof(global_conf)) != global_conf.checksum) {
     global_conf.currentSet = 0;
     global_conf.accZero[ROLL] = 5000;    // for config error signalization

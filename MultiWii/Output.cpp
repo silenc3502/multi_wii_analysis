@@ -224,6 +224,7 @@ void writeServos() {
 /**************************************************************************************/
 /************  Writes the Motors values to the PWM compare register  ******************/
 /**************************************************************************************/
+// 1000 = 1 ms, 2000 = 2 ms
 void writeMotors() { // [1000;2000] => [125;250]
   /****************  Specific PWM Timers & Registers for the MEGA's   *******************/
   #if defined(MEGA)// [1000:2000] => [8000:16000] for timer 3 & 4 for mega
@@ -415,6 +416,11 @@ void writeMotors() { // [1000;2000] => [125;250]
       #elif defined(EXT_MOTOR_1KHZ)
         OCR1A = (motor[0] - 1000) << 3;
       #else
+        // Arduino ADC 가 8 비트 - 256 한계
+        // 좀 좋은 보드들은 ADC 가 12 비트 - 4096 한계
+        // 표현할 수 있도록 스케일링을 위해 8 로 나눠 2000 을 250 으로 표현한 것임
+        // OCR1A = 0x88
+        // 250 을 카운팅 하면서 적절한 PWM 신호를 발생시켜줌
         OCR1A = motor[0]>>3; //  pin 9
       #endif
     #endif
@@ -499,8 +505,10 @@ void writeAllMotors(int16_t mc) {   // Sends commands to all motors
 /**************************************************************************************/
 void initOutput() {
   /****************            mark all PWM pins as Output             ******************/
+  // 쿼드 콥터이므로 NUMBER_MOTOR 는 4 에 해당함
+  // uint8_t PWM_PIN[8] = {9,10,11,3,6,5,A2,12};   // rear,right,left,front
   for(uint8_t i=0;i<NUMBER_MOTOR;i++) {
-    pinMode(PWM_PIN[i],OUTPUT);
+    pinMode(PWM_PIN[i],OUTPUT); // 3 - 앞, 9 - 뒤, 10 - 오른쪽, 11 - 왼쪽
   }
     
   /****************  Specific PWM Timers & Registers for the MEGA's    ******************/
@@ -631,6 +639,9 @@ void initOutput() {
   #endif
   
   /********  Specific PWM Timers & Registers for the atmega328P (Promini)   ************/
+  // 이 녀석이 우리의 아키텍처에서 사용하는 PWM 설정
+  // RC 용 모터들의 특징 - 주기 20 ms(50 Hz), Duty 1 ~ 2 ms
+  // 즉 동작하는 모터의 종류에 따라 펄스 간격을 조종하기 위한 코드
   #if defined(PROMINI)
     #if defined(EXT_MOTOR_32KHZ)
       TCCR1A = (1<<WGM11); // phase correct mode & no prescaler
@@ -650,15 +661,22 @@ void initOutput() {
     #endif
 
     #if (NUMBER_MOTOR > 0)
+      // TCCR1A = 0x80
+      // COM1A1 = 7
+      // _BV(7) = 128 로 7 번 비트 활성화!
       TCCR1A |= _BV(COM1A1); // connect pin 9 to timer 1 channel A
     #endif
     #if (NUMBER_MOTOR > 1)
+      // COM1B1 = 5
+      // _BV(5) = 32 로 5 번 비트 활성화!
       TCCR1A |= _BV(COM1B1); // connect pin 10 to timer 1 channel B
     #endif
     #if (NUMBER_MOTOR > 2)
+      // COM2A1 = 7
       TCCR2A |= _BV(COM2A1); // connect pin 11 to timer 2 channel A
     #endif
     #if (NUMBER_MOTOR > 3)
+      // COM2B1 = 5
       TCCR2A |= _BV(COM2B1); // connect pin 3 to timer 2 channel B
     #endif
     #if (NUMBER_MOTOR > 4)  // PIN 5 & 6 or A0 & A1
@@ -685,6 +703,7 @@ void initOutput() {
     exit; // statement never reached
   #endif
   
+  // 가장 저속인 1 ms 는 시동만 건다고 볼 수 있음(모터 활성화)
   writeAllMotors(MINCOMMAND);
   delay(300);
   #if defined(SERVO)

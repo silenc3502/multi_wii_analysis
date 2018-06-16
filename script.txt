@@ -2,7 +2,7 @@ set hlsearch
 set nu
 set ts=4
 
-set tags=/home/sdr/kernel/linux-4.4/tags
+set tags=/home/kcrg/proj/multi_wii_analysis/tags
 "set tags=/home/sdr/glibc/glibc-2.21/tags
 if version >= 500
 func! Sts( )
@@ -19,7 +19,7 @@ endif
 
 set csprg=/usr/bin/cscope
 set nocsverb
-cs add /home/sdr/kernel/linux-4.4/cscope.out
+cs add /home/kcrg/proj/multi_wii_analysis/cscope.out
 "cs add /home/sdr/glibc/glibc-2.21/cscope.out
 set csto=0
 set cst

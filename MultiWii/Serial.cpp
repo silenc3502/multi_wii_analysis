@@ -111,10 +111,23 @@ void UartSendData(uint8_t port) {
 #endif
 
 void SerialOpen(uint8_t port, uint32_t baud) {
-  uint8_t h = ((F_CPU  / 4 / baud -1) / 2) >> 8;
-  uint8_t l = ((F_CPU  / 4 / baud -1) / 2);
+  // F_CPU = 16 MHz(16 000 000)
+  // baud = 115200
+  // (F_CPU  / 4 / baud -1) = 34
+  // ((F_CPU  / 4 / baud -1) / 2) = 17
+  uint8_t h = ((F_CPU  / 4 / baud -1) / 2) >> 8;	// h = 0
+  uint8_t l = ((F_CPU  / 4 / baud -1) / 2);			// l = 17
   switch (port) {
     #if defined(PROMINI)
+      // UCSR0A = 0xC0
+      // U2X0 = 1
+      // UART 0 번 포트를 비동기 방식으로 처리함
+
+      // UBRR0H = 0xC5
+      // UBRR0L = 0xC4
+      // Real UART Baud Rate = 111111(115200)
+      // UCSR0B = 0xC1
+      // 최종적으로 UART 포트 0 번의 Buad Rate 를 115200 으로 잡고 RX, TX 활성화 및 RX 완료시 인터럽트 발생하도록 설정!
       case 0: UCSR0A  = (1<<U2X0); UBRR0H = h; UBRR0L = l; UCSR0B |= (1<<RXEN0)|(1<<TXEN0)|(1<<RXCIE0); break;
     #endif
     #if defined(PROMICRO)

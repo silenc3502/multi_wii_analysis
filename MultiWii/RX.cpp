@@ -50,10 +50,14 @@ void configureReceiver() {
       DDRK = 0;  // defined PORTK as a digital port ([A8-A15] are consired as digital PINs and not analogical)
     #endif
     // PCINT activation
+    // PCINT_PIN_COUNT = 5
+    // PCInt_RX_Pins[] = { 2 번, 4 번, 5 번, 6 번, 7 번 비트 }
     for(uint8_t i = 0; i < PCINT_PIN_COUNT; i++){ // i think a for loop is ok for the init.
       PCINT_RX_PORT |= PCInt_RX_Pins[i];
       PCINT_RX_MASK |= PCInt_RX_Pins[i];
     }
+    // 2 번째 비트
+    // 수신기로 부터 들어오는 신호(인터럽트)를 처리하겠다!
     PCICR = PCIR_PORT_BIT;
     
     /*************    atmega328P's Specific Aux2 Pin Setup    *********************/

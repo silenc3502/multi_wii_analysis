@@ -276,6 +276,7 @@
 /**************************   atmega328P (Promini)  ************************************/
 #if defined(PROMINI)
   #if !defined(MONGOOSE1_0)
+    // OUTPUT 0x1
     #define LEDPIN_PINMODE             pinMode (13, OUTPUT);
     #define LEDPIN_TOGGLE              PINB |= 1<<5;     //switch LEDPIN state (digital PIN 13)
     #define LEDPIN_OFF                 PORTB &= ~(1<<5);
