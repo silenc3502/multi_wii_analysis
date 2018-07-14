@@ -309,19 +309,30 @@ void configureReceiver() {
 /**************************************************************************************/
 #if defined(SBUS)
 
+// 조종기가 구동하는 순간 RF 송신기쪽에서 100% 는 아니지만 어느정도 확정적으로 0xF0 이 날아간다!!!
 #define SBUS_SYNCBYTE 0x0F // Not 100% sure: at the beginning of coding it was 0xF0 !!!
 static uint16_t sbusIndex=0;
 static uint16_t sbus[25]={0};
 
 void readSerial_RX(){
+  // TODO: 실제 Channel ID 를 여기서 처리할 가능성이 높음
+  // 그러므로 이 부분이 어떻게 Wrapping 되어 있는지 확인 할 필요성이 있음
   while(SerialAvailable(RX_SERIAL_PORT)){
     int val = SerialRead(RX_SERIAL_PORT);
+    // RF 송수신기가 상호간 잘 연결되었는지 확인함
     if(sbusIndex==0 && val != SBUS_SYNCBYTE)
       continue;
+    // 수신되는 RF 데이터를 쭉 받아서 저장한다.
+    // UART 베이스이기 때문에 데이터 수신이 1 byte 로 이루어질 것이다.
     sbus[sbusIndex++] = val;
+    // 25 바이트를 수신할 때 까지
     if(sbusIndex==25){
       sbusIndex=0;
       spekFrameFlags = 0x00;
+      /* sbus[0] 이 Channel ID 가 될 가능성이 있음 <- TODO: 위의 코드를 보고 최종 확인해야함
+         subs[1], [2], [3], ... 등을 활용해서 실제 PWM Duty 를 계산하게됨
+         
+         SBUS_MID_OFFSET == 988 */
       rcValue[0]  = ((sbus[1]|sbus[2]<< 8) & 0x07FF)/2+SBUS_MID_OFFSET;
       rcValue[1]  = ((sbus[2]>>3|sbus[3]<<5) & 0x07FF)/2+SBUS_MID_OFFSET; 
       rcValue[2]  = ((sbus[3]>>6|sbus[4]<<2|sbus[5]<<10) & 0x07FF)/2+SBUS_MID_OFFSET; 
