@@ -648,6 +648,9 @@ void setup() {
   // 구동 되지 않음
   POWERPIN_OFF;
   // 모터를 활성화 시키고 PWM 신호를 인가함
+  // 결국 여기서 Full Throttle(duty - 2ms) 넣어주고 Bottom(duty - 1ms) 으로 떨굼
+  // 이를 수행함으로써 ESC 가 최대 및 최소 전류값을 파악하게됨
+  // 이러한 동작을 줄여서 ESC Calibration 이라고 함
   initOutput();
   // EEPROM 을 읽어서 전류값이라든지 여러 정보를 읽어오고 설정에 문제가 없는지 확인함
   readGlobalSet();
@@ -708,6 +711,15 @@ void setup() {
   #if GPS
     GPS_set_pids();
   #endif
+  /* 현재까지 진행된 시간 값을 얻어옴
+     컴퓨터는 기본적으로 연속 연산을 수행 할 수 없기 때문에
+     디지털 방식으로 미분을 수행 할 필요가 있음.
+     미분을 기하학적으로 해석해보면 결국 기울기에 해당하므로
+     높이 / 밑변으로 해석 해도 된다.
+     속도, 가속도 등의 미분 식은 dx/dt, dv/dt 에 해당하므로
+     샘플링 타임(현재 시간 - 이전 시간[previousTime])을 dt 로 사용하고
+     현 시점에서 계측된 위치 값이나 속도를 dx 및 dv 로 사용하면
+     해당 시점의 미분 값을 얻어낼 수 있다(속도 및 가속도) */
   previousTime = micros();
   #if defined(GIMBAL)
    calibratingA = 512;
@@ -834,8 +846,20 @@ void loop () {
   static uint8_t rcDelayCommand; // this indicates the number of time (multiple of RC measurement at 50Hz) the sticks must be maintained to run or switch off motors
   static uint8_t rcSticks;       // this hold sticks position for command combos
   uint8_t axis,i;
-  int16_t error,errorAngle;
+  /* error 는 속도에 대한 오차, errorAngle 은 각도에 대한 오차
+     PID 제어를 하게 되면 현재 계측되는 모터의 속도가 있을 것이고
+     우리가 출력으로 얻고자 하는 값이 존재할 것이다.
+     둘 사이의 차이가 error 라고 보면 됨(결국 thrust - 추력을 파악하기 위함)
+     errorAngle 의 경우에는 현재 자세가 안정적인지 판정을 하기 위함
+     또한 적절한 토크값을 계산하기 위해서도 정확한 오차값이 필요함
+     각도 x 만큼 기울어져 있는데 x + 30(오차가 커서)으로 토크를 계산하게 되면
+     한 방에 쿼드콥터 몸체가 역으로 회전하는 불상사가 발생 할 수도 있음
+     앞서서 초기화했던 I2C 센서에서 값을 받아올 것임(MPU6050 에서 받아옴) */
+  int16_t error,errorAngle;      
   int16_t delta;
+  /* PID 제어기에서 사용하는 변수들로
+     PTerm = Angle P Gain, ITerm = Angle I Gain, DTerm = Angle D Gain
+     PTermACC = Accel P Gain, ITermACC = Accel I Gain */
   int16_t PTerm = 0,ITerm = 0,DTerm, PTermACC, ITermACC;
   static int16_t lastGyro[2] = {0,0};
   static int16_t errorAngleI[2] = {0,0};
@@ -843,6 +867,7 @@ void loop () {
   static int32_t errorGyroI_YAW;
   static int16_t delta1[2],delta2[2];
   static int16_t errorGyroI[2] = {0,0};
+  // 우리가 사용하는 센서가 3 차원 센서이므로 차원이 3 개 필요함(x, y, z)
   #elif PID_CONTROLLER == 2
   static int16_t delta1[3],delta2[3];
   static int32_t errorGyroI[3] = {0,0,0};
@@ -855,6 +880,9 @@ void loop () {
   int16_t rc;
   int32_t prop = 0;
 
+  // SERIAL_RX 가 SPEKTRUM 이 정의되어 있으면 정의되는데
+  // def.h 에 COPTERTEST == 4 가 쿼드콥터에 해당하므로
+  // SPEKTRUM 은 2048 로 값이 정의되어 있으므로 SERIAL_RX 가 활성화 됨
   #if defined(SERIAL_RX)
     if (spekFrameFlags == 0x01) readSerial_RX();
   #endif
