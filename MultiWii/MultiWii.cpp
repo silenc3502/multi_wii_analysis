@@ -270,6 +270,7 @@ uint16_t intPowerTrigger1;
 int16_t failsafeEvents = 0;
 volatile int16_t failsafeCnt = 0;
 
+// RC_CHANS = SPEKTRUM(if) 12
 int16_t rcData[RC_CHANS];    // interval [1000;2000]
 int16_t rcSerial[8];         // interval [1000;2000] - is rcData coming from MSP
 int16_t rcCommand[4];        // interval [1000;2000] for THROTTLE and [-500;+500] for ROLL/PITCH/YAW
@@ -922,8 +923,13 @@ void loop () {
     uint8_t stTmp = 0;
     for(i=0;i<4;i++) {
       stTmp >>= 2;
+      // MINCHECK = 1100, MAXCHECK = 1900
       if(rcData[i] > MINCHECK) stTmp |= 0x80;      // check for MIN
       if(rcData[i] < MAXCHECK) stTmp |= 0x40;      // check for MAX
+      // 1st Loop - 0b 0100 0000
+      // 2nd Loop - 0b 0001 0000 OR 0b 0100 0000 = 0b 0101 0000
+      // ...
+      // 4th Loop - 0b 0101 0101 = 0x55
     }
     if(stTmp == rcSticks) {
       if(rcDelayCommand<250) rcDelayCommand++;
@@ -931,6 +937,10 @@ void loop () {
     rcSticks = stTmp;
     
     // perform actions    
+    /* 조종기로 들어오는 Throttle 값이 1100 보다 작다면
+     * 각속도 오차의 Roll, Pitch 값을 0 으로 설정하고
+     * PID 제어기를 몇 개 사용하냐에 따라 YAW 값을 적절하게 0 으로 초기화 해줌(개수만큼)
+     * 각도 오차의 Roll, Pitch 값을 0 으로 설정함 */
     if (rcData[THROTTLE] <= MINCHECK) {            // THROTTLE at minimum
       #if !defined(FIXEDWING)
         errorGyroI[ROLL] = 0; errorGyroI[PITCH] = 0;
@@ -941,6 +951,9 @@ void loop () {
         #endif
         errorAngleI[ROLL] = 0; errorAngleI[PITCH] = 0;
       #endif
+      /* conf 구조체가 결국 PID 제어기와 관련딘 계수값들을 설정하는 장소
+       * BOXARM 이 숫자 0 이므로 기본 설정인 채널 6 개 외의 다른 채널을 사용한다면 여기에 값이 들어올 것이고
+       * 그 값이 0 보다 크다면 if 문 아래쪽의 부분을 수행할 것임 */
       if (conf.activate[BOXARM] > 0) {             // Arming/Disarming via ARM BOX
         if ( rcOptions[BOXARM] && f.OK_TO_ARM ) go_arm(); else if (f.ARMED) go_disarm();
       }
@@ -1046,6 +1059,7 @@ void loop () {
       led_flasher_autoselect_sequence();
     #endif
     
+    // SPEKTRUM 조종기를 기반으로 할 경우 해당 라인은 의미가 없음
     #if defined(INFLIGHT_ACC_CALIBRATION)
       if (AccInflightCalibrationArmed && f.ARMED && rcData[THROTTLE] > MINCHECK && !rcOptions[BOXARM] ){ // Copter is airborne and you are turning it off via boxarm : start measurement
         InflightcalibratingA = 50;
@@ -1061,6 +1075,7 @@ void loop () {
       }
     #endif
 
+    // 채널 6 개 이하이므로 의미가 없음
     #if defined(EXTENDED_AUX_STATES)
     uint32_t auxState = 0;
     for(i=0;i<4;i++)
@@ -1075,8 +1090,14 @@ void loop () {
     uint16_t auxState = 0;
     for(i=0;i<4;i++)
       auxState |= (rcData[AUX1+i]<1300)<<(3*i) | (1300<rcData[AUX1+i] && rcData[AUX1+i]<1700)<<(3*i+1) | (rcData[AUX1+i]>1700)<<(3*i+2);
+    // 1st Loop - 1
+    // 2nd Loop - 1 | 8 = 9
+    // 3rd Loop - 9 | 64 = 73
+    // 4th Loop - 73 | 512 = 585
+    // 0b 0010 0100 1001
     #endif
 
+    // rcOptions 는 자동으로 전부 0 이 설정됨(추가 옵션이 없기 때문)
     for(i=0;i<CHECKBOXITEMS;i++)
       rcOptions[i] = (auxState & conf.activate[i])>0;
 
@@ -1089,6 +1110,7 @@ void loop () {
           f.ANGLE_MODE = 1;
         }  
       } else {
+        // flags_struct_t 구조체의 ANGLE_MODE 를 활성화 시킴
         if(f.ANGLE_MODE){
           errorGyroI[ROLL] = 0; errorGyroI[PITCH] = 0;
         }
@@ -1321,6 +1343,7 @@ void loop () {
   }
   previousTime = currentTime;
 
+  // MPU6050 센서에서 각도 혹은 각속도, 가속도에 대한 계산을 
   computeIMU();
 
   //***********************************
@@ -1352,6 +1375,7 @@ void loop () {
   }
 
   //Heading manipulation TODO: Do heading manipulation 
+  // 구동시 전방을 바라볼 수 있게 해줌: TODO
   #endif
 
   if (abs(rcCommand[YAW]) <70 && f.MAG_MODE) {
@@ -1427,23 +1451,31 @@ void loop () {
 
   //**** PITCH & ROLL & YAW PID ****
   #if PID_CONTROLLER == 1 // evolved oldschool
+  // 512 이하
   if ( f.HORIZON_MODE ) prop = min(max(abs(rcCommand[PITCH]),abs(rcCommand[ROLL])),512);
 
   // PITCH & ROLL
+  // 디폴트 제어기가 PD 제어기이고
+  // 수평 모드가 활성화 될 경우에는 Adaptive PID Controller 가 됨
   for(axis=0;axis<2;axis++) {
+    // rcCommand 가 명령
     rc = rcCommand[axis]<<1;
+    // imu.gryoData 가 실제 센서 계측값
     error = rc - imu.gyroData[axis];
+    // 제한자로 -16000 ~ 16000 사이의 오차 값을 가지게 함
     errorGyroI[axis]  = constrain(errorGyroI[axis]+error,-16000,+16000);       // WindUp   16 bits is ok here
     if (abs(imu.gyroData[axis])>640) errorGyroI[axis] = 0;
 
-    // 적분 제어기 계수
+    // 적분 제어기 계수 - 0 ~ 3
     ITerm = (errorGyroI[axis]>>7)*conf.pid[axis].I8>>6;                        // 16 bits is ok here 16000/125 = 128 ; 128*250 = 32000
 
     // 비례 제어기 계수
     PTerm = mul(rc,conf.pid[axis].P8)>>6;
     
+    // 적응 제어(Adaptive Control) Part
     if (f.ANGLE_MODE || f.HORIZON_MODE) { // axis relying on ACC
       // 50 degrees max inclination
+      // 각도 제한이 50 도 - Fixed Point 기법
       errorAngle         = constrain(rc + GPS_angle[axis],-500,+500) - att.angle[axis] + conf.angleTrim[axis]; //16 bits is ok here
       errorAngleI[axis]  = constrain(errorAngleI[axis]+errorAngle,-10000,+10000);                                                // WindUp     //16 bits is ok here
 
